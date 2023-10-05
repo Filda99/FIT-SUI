@@ -1,137 +1,156 @@
 #include "search-strategies.h"
 #include <vector>
-#include <stack>
 #include "memusage.h"
 #include <algorithm>
-#include <unordered_set>
-#include <iostream>
-
-#include "search-strategies.h"
+#include <unordered_map>
 #include <iostream>
 #include <deque>
-#include <queue>
-#include <set>
-#include <map>
-#include <algorithm>
-#include "memusage.h"
+#include <memory>
 
 using namespace std;
 
-struct State
+struct StateBFS
 {
 	shared_ptr<SearchState> node;
-	vector<shared_ptr<SearchAction>> actions;
+	shared_ptr<SearchState> prevNode;
+	shared_ptr<SearchAction> actionFromPreviousState;
+};
+
+struct StateDFS
+{
+	shared_ptr<SearchState> node;
+	shared_ptr<SearchState> prevNode;
+	shared_ptr<SearchAction> actionFromPreviousState;
+	uint32_t index;
 };
 
 vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_state)
 {
-	if (init_state.isFinal()) return {};
+	if (init_state.isFinal())
+	{
+		return {};
+	}
 
-	deque<State> open;
-	unordered_set<shared_ptr<SearchState>> closed;
+	deque<shared_ptr<StateBFS>> open;
+	unordered_map<shared_ptr<SearchState>, shared_ptr<StateBFS>> closed;
 
 	// Initial state
-	State initInfo = {make_shared<SearchState>(init_state), {}};
-	open.push_back(move(initInfo));
-
-	// If the final solution is found, we want to return the solution
-	bool isSolutionFound = false;
+	shared_ptr<StateBFS> initState = make_shared<StateBFS>();
+	initState->node = make_shared<SearchState>(init_state);
+	open.push_back(initState);
 
 	// Cycle through the tree
-	while (!open.empty() && !isSolutionFound)
+	while (!open.empty())
 	{
-		shared_ptr<SearchState> currentState = move(open.back().node);
-		vector<shared_ptr<SearchAction>> currentStateActions = move(open.back().actions);
+		shared_ptr<StateBFS> currentState = move(open.back());
 		open.pop_back();
 
-		closed.insert(currentState);
+		// Check current state for final
+		if (currentState->node->isFinal())
+		{
+			open.push_back(move(currentState));
+			break;
+		}
+
+		// closed.insert(currentState);
+		closed[currentState->node] = currentState;
 
 		// Save all child-nodes to open
-		for (const SearchAction &action : currentState->actions())
+		for (auto action : currentState->node->actions())
 		{
-			shared_ptr<SearchState> nextState = make_shared<SearchState>(move(action.execute(*currentState)));
-			if (getCurrentRSS() > (mem_limit_ * 0.90))
+			if (getCurrentRSS() > (mem_limit_ * 0.97))
 			{
 				return {};
 			}
+
+			shared_ptr<StateBFS> nextState = make_shared<StateBFS>();
+			nextState->node = make_shared<SearchState>(action.execute(*currentState->node));
+
 			// Insert only not visited nodes
-			if (closed.find(nextState) == closed.end())
+			if (closed.find(nextState->node) == closed.end())
 			{
-				vector<shared_ptr<SearchAction>> actionPath = currentStateActions;
-				actionPath.push_back(make_shared<SearchAction>(action));
-				open.push_front({nextState, move(actionPath)});
-				if (nextState->isFinal())
-				{
-					isSolutionFound = true;
-					break;
-				}
+				nextState->actionFromPreviousState = make_shared<SearchAction>(action);
+				nextState->prevNode = currentState->node;
+				open.push_front(move(nextState));
 			}
 		}
 	}
 
 	// Create path to final node
 	vector<SearchAction> solution = {};
-	if (!open.empty() && open.front().node->isFinal())
+	if (!closed.empty() && open.back()->node->isFinal())
 	{
-		// Solution is saved in last node->actions (which handles path from init node to final one)
-		for (shared_ptr<SearchAction> &action : open.front().actions)
+		shared_ptr<StateBFS> actualState = open.back();
+		while (actualState->node != initState->node)
 		{
-			solution.push_back(*action);
+			solution.push_back(*(actualState->actionFromPreviousState));
+			shared_ptr<StateBFS> prevState = make_shared<StateBFS>();
+			prevState->node = actualState->prevNode;
+
+			auto it = closed.find(prevState->node);
+			if (it != closed.end())
+			{
+				actualState = it->second; // Assign actualState to the found element
+			}
 		}
+		reverse(solution.begin(), solution.end());
 		return solution;
 	}
-	else
-	{
-		return {};
-	}
+
+	return {};
 }
 
 vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 {
-	if (init_state.isFinal()) return {};
+	if (init_state.isFinal())
+	{
+		return {};
+	}
 
-	deque<State> open;
-	unordered_set<shared_ptr<SearchState>> closed;
+	deque<shared_ptr<StateDFS>> open;
+	unordered_map<shared_ptr<SearchState>, shared_ptr<StateDFS>> closed;
 
 	// Initial state
-	State initInfo = {make_shared<SearchState>(init_state), {}};
-	open.push_back(move(initInfo));
-
-	// If the final solution is found, we want to return the solution
-	bool isSolutionFound = false;
+	shared_ptr<StateDFS> initState = make_shared<StateDFS>();
+	initState->node = make_shared<SearchState>(init_state);
+	initState->index = 0;
+	open.push_back(initState);
 
 	// Cycle through the tree
-	while (!open.empty() && !isSolutionFound)
+	while (!open.empty())
 	{
-		if (open.back().actions.size() < depth_limit_)
-		{
-			shared_ptr<SearchState> currentState = move(open.back().node);
-			vector<shared_ptr<SearchAction>> currentStateActions = move(open.back().actions);
-			open.pop_back();
+		shared_ptr<StateDFS> currentState = move(open.back());
+		open.pop_back();
 
-			closed.insert(currentState);
+		if (currentState->index < depth_limit_)
+		{
+			// Check current state for final
+			if (currentState->node->isFinal())
+			{
+				open.push_back(move(currentState));
+				break;
+			}
+
+			closed[currentState->node] = currentState;
 
 			// Save all child-nodes to open
-			for (const SearchAction &action : currentState->actions())
+			for (auto action : currentState->node->actions())
 			{
-				shared_ptr<SearchState> nextState = make_shared<SearchState>(move(action.execute(*currentState)));
-
-				if (getCurrentRSS() > (mem_limit_ * 0.90))
+				if (getCurrentRSS() > (mem_limit_ * 0.97))
 				{
 					return {};
 				}
 
+				shared_ptr<StateDFS> nextState = make_shared<StateDFS>();
+				nextState->node = make_shared<SearchState>(action.execute(*currentState->node));
+
 				// Insert only not visited nodes
-				if (closed.find(nextState) == closed.end())
+				if (closed.find(nextState->node) == closed.end())
 				{
-					vector<shared_ptr<SearchAction>> actionPath = currentStateActions;
-					actionPath.push_back(make_shared<SearchAction>(action));
-					open.push_back({nextState, move(actionPath)});
-					if (nextState->isFinal())
-					{
-						isSolutionFound = true;
-						break;
-					}
+					nextState->actionFromPreviousState = make_shared<SearchAction>(action);
+					nextState->prevNode = currentState->node;
+					nextState->index = currentState->index + 1;
+					open.push_back(move(nextState));
 				}
 			}
 		}
@@ -143,19 +162,26 @@ vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 
 	// Create path to final node
 	vector<SearchAction> solution = {};
-	if (!open.empty() && open.back().node->isFinal())
+	if (!closed.empty() && !open.empty() && open.back()->node->isFinal())
 	{
-		// Solution is saved in last node->actions (which handles path from init node to final one)
-		for (shared_ptr<SearchAction> &action : open.back().actions)
+		shared_ptr<StateDFS> actualState = open.back();
+		while (actualState->node != initState->node)
 		{
-			solution.push_back(*action);
+			solution.push_back(*(actualState->actionFromPreviousState));
+			shared_ptr<StateDFS> prevState = make_shared<StateDFS>();
+			prevState->node = actualState->prevNode;
+
+			auto it = closed.find(prevState->node);
+			if (it != closed.end())
+			{
+				actualState = it->second; // Assign actualState to the found element
+			}
 		}
+		reverse(solution.begin(), solution.end());
 		return solution;
 	}
-	else
-	{
-		return {};
-	}
+
+	return {};
 }
 
 double StudentHeuristic::distanceLowerBound(const GameState &state) const
