@@ -1,3 +1,5 @@
+
+
 #include "search-strategies.h"
 #include <vector>
 #include "memusage.h"
@@ -6,13 +8,14 @@
 #include <iostream>
 #include <deque>
 #include <memory>
+#include <set>
 
 using namespace std;
 
 struct StateBFS
 {
 	shared_ptr<SearchState> node;
-	shared_ptr<SearchState> prevNode;
+	shared_ptr<StateBFS> prevNode;
 	shared_ptr<SearchAction> actionFromPreviousState;
 };
 
@@ -26,6 +29,7 @@ struct StateDFS
 
 vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_state)
 {
+	cout << "=================" << endl;
 	if (init_state.isFinal())
 	{
 		return {};
@@ -39,8 +43,9 @@ vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_state)
 	initState->node = make_shared<SearchState>(init_state);
 	open.push_back(initState);
 
+	bool found = false;
 	// Cycle through the tree
-	while (!open.empty())
+	while (!open.empty() && found == false)
 	{
 		shared_ptr<StateBFS> currentState = move(open.back());
 		open.pop_back();
@@ -48,50 +53,56 @@ vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_state)
 		// Check current state for final
 		if (currentState->node->isFinal())
 		{
-			open.push_back(move(currentState));
+			open.push_front(move(currentState));
 			break;
 		}
 
-		// closed.insert(currentState);
+		// closed[currentState->node] = currentState;
 		closed[currentState->node] = currentState;
 
 		// Save all child-nodes to open
-		for (auto action : currentState->node->actions())
+		for (auto &action : currentState->node->actions())
 		{
-			if (getCurrentRSS() > (mem_limit_ * 0.97))
+			if (getCurrentRSS() + 1000000 > mem_limit_)
 			{
+				cout << "Dosla pamet" << endl;
+				cout << getCurrentRSS() <<endl;
+				cout << open.size() << "  " << closed.size() << endl;
 				return {};
 			}
 
 			shared_ptr<StateBFS> nextState = make_shared<StateBFS>();
 			nextState->node = make_shared<SearchState>(action.execute(*currentState->node));
+			nextState->actionFromPreviousState = make_shared<SearchAction>(action);
+			nextState->prevNode = currentState;
 
-			// Insert only not visited nodes
-			if (closed.find(nextState->node) == closed.end())
+			if (nextState->node->isFinal())
 			{
-				nextState->actionFromPreviousState = make_shared<SearchAction>(action);
-				nextState->prevNode = currentState->node;
+				found = true;
+				open.push_front(move(nextState));
+				break;
+			}
+			// Insert only not visited nodes
+			else if (closed.find(nextState->node) == closed.end())
+			{
 				open.push_front(move(nextState));
 			}
 		}
 	}
 
+	cout << open.size() << "  " << closed.size() << endl;
+
+
 	// Create path to final node
 	vector<SearchAction> solution = {};
-	if (!closed.empty() && open.back()->node->isFinal())
+	if (!closed.empty() && open.front()->node->isFinal())
 	{
-		shared_ptr<StateBFS> actualState = open.back();
+		shared_ptr<StateBFS> actualState = open.front();
 		while (actualState->node != initState->node)
 		{
 			solution.push_back(*(actualState->actionFromPreviousState));
-			shared_ptr<StateBFS> prevState = make_shared<StateBFS>();
-			prevState->node = actualState->prevNode;
-
-			auto it = closed.find(prevState->node);
-			if (it != closed.end())
-			{
-				actualState = it->second; // Assign actualState to the found element
-			}
+			auto prevState = actualState->prevNode;
+			actualState = prevState;
 		}
 		reverse(solution.begin(), solution.end());
 		return solution;
