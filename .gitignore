@@ -1,4 +1,4 @@
-/build
-/dep
+*.o
+*.d
 fc-sui
-fc-sui
+test-bin
