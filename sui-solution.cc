@@ -7,8 +7,7 @@
 #include <deque>
 #include <memory>
 #include <set>
-
-
+#include <queue>
 
 /*************************************************************
  * STRUCTURES *
@@ -29,36 +28,44 @@ struct StateDFS
 	int index;
 };
 
+struct StateAStar
+{
+	std::shared_ptr<SearchState> node;
+	std::shared_ptr<StateAStar> prevNode;
+	std::shared_ptr<SearchAction> actionFromPreviousState;
+	double priority;
+	int index;
+};
+
+struct StateAStarCompare
+{
+	bool operator()(const std::shared_ptr<StateAStar> &lhs, const std::shared_ptr<StateAStar> &rhs) const
+	{
+		return lhs->priority > rhs->priority;
+	}
+};
 
 /*************************************************************
  * HASH FUNCTIONS *
  *************************************************************/
 
-struct StateEquality {
-  bool operator()(const std::shared_ptr<StateBFS> &lhs,
-                  const std::shared_ptr<StateBFS> &rhs) const {
-    return *lhs->node == *rhs->node;
-  }
+template <typename StateType>
+struct StateEquality
+{
+	bool operator()(const std::shared_ptr<StateType> &lhs,
+					const std::shared_ptr<StateType> &rhs) const
+	{
+		return *lhs->node == *rhs->node;
+	}
 };
 
-struct StateHash {
-  size_t operator()(const std::shared_ptr<StateBFS> &state) const {
-    return hash(*state->node);
-  }
-};
-
-
-struct StateEqualityDFS {
-  bool operator()(const std::shared_ptr<StateDFS> &lhs,
-                  const std::shared_ptr<StateDFS> &rhs) const {
-    return *lhs->node == *rhs->node;
-  }
-};
-
-struct StateHashDFS {
-  size_t operator()(const std::shared_ptr<StateDFS> &state) const {
-    return hash(*state->node);
-  }
+template <typename StateType>
+struct StateHash
+{
+	size_t operator()(const std::shared_ptr<StateType> &state) const
+	{
+		return hash(*state->node);
+	}
 };
 
 bool operator==(const SearchState &a, const SearchState &b)
@@ -66,31 +73,35 @@ bool operator==(const SearchState &a, const SearchState &b)
 	return a.state_ == b.state_;
 }
 
-
-inline size_t hash_card(const Card &card) {
-  return std::hash<int>()(static_cast<int>(card.color)) ^
-         (std::hash<int>()(card.value) << 1);
+inline size_t hash_card(const Card &card)
+{
+	return std::hash<int>()(static_cast<int>(card.color)) ^
+		   (std::hash<int>()(card.value) << 1);
 }
 
-size_t hash(const SearchState &state) {
-  size_t hash = 0;
+size_t hash(const SearchState &state)
+{
+	size_t hash = 0;
 
-  for (const auto &freeCell : state.state_.free_cells) {
-    auto card = freeCell.topCard();
-    if (card.has_value()) {
-      hash ^= hash_card(card.value());
-    }
-  }
+	for (const auto &freeCell : state.state_.free_cells)
+	{
+		auto card = freeCell.topCard();
+		if (card.has_value())
+		{
+			hash ^= hash_card(card.value());
+		}
+	}
 
-  for (const auto &tableauStack : state.state_.stacks) {
-    for (const auto &card : tableauStack.storage()) {
-      hash ^= hash_card(card) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-    }
-  }
+	for (const auto &tableauStack : state.state_.stacks)
+	{
+		for (const auto &card : tableauStack.storage())
+		{
+			hash ^= hash_card(card) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		}
+	}
 
-  return hash;
+	return hash;
 }
-
 
 /*************************************************************
  * BFS *
@@ -104,7 +115,7 @@ std::vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_stat
 	}
 
 	std::deque<std::shared_ptr<StateBFS>> open;
-	std::unordered_set<std::shared_ptr<StateBFS>, StateHash, StateEquality> closed;
+	std::unordered_set<std::shared_ptr<StateBFS>, StateHash<StateBFS>, StateEquality<StateBFS>> closed;
 
 	// Initial state
 	std::shared_ptr<StateBFS> initState = std::make_shared<StateBFS>();
@@ -152,7 +163,6 @@ std::vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_stat
 		}
 	}
 
-
 	// Create path to final node
 	std::vector<SearchAction> solution = {};
 	if (!closed.empty() && open.front()->node->isFinal())
@@ -170,8 +180,6 @@ std::vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_stat
 	return {};
 }
 
-
-
 /*************************************************************
  * DFS *
  *************************************************************/
@@ -184,7 +192,7 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 	}
 
 	std::deque<std::shared_ptr<StateDFS>> open;
-	std::unordered_set<std::shared_ptr<StateDFS>, StateHashDFS, StateEqualityDFS> closed;
+	std::unordered_set<std::shared_ptr<StateDFS>, StateHash<StateDFS>, StateEquality<StateDFS>> closed;
 
 	// Initial state
 	std::shared_ptr<StateDFS> initState = std::make_shared<StateDFS>();
@@ -216,7 +224,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 					return {};
 				}
 
-
 				std::shared_ptr<StateDFS> nextState = std::make_shared<StateDFS>();
 				nextState->node = std::make_shared<SearchState>(action.execute(*currentState->node));
 				nextState->actionFromPreviousState = std::make_shared<SearchAction>(action);
@@ -242,7 +249,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 		}
 	}
 
-
 	// Create path to final node
 	std::vector<SearchAction> solution = {};
 	if (!closed.empty() && !open.empty() && open.front()->node->isFinal())
@@ -260,8 +266,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 	return {};
 }
 
-
-
 /*************************************************************
  * A STAR *
  *************************************************************/
@@ -273,5 +277,84 @@ double StudentHeuristic::distanceLowerBound(const GameState &state) const
 
 std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 {
+	if (init_state.isFinal())
+	{
+		return {};
+	}
+
+	std::priority_queue<std::shared_ptr<StateAStar>,
+						std::vector<std::shared_ptr<StateAStar>>,
+						StateAStarCompare>
+		openPrio;
+
+	std::unordered_set<std::shared_ptr<StateAStar>,
+					   StateHash<StateAStar>,
+					   StateEquality<StateAStar>>
+		closed;
+
+	// Initial state
+	std::shared_ptr<StateAStar> initState = std::make_shared<StateAStar>();
+	initState->node = std::make_shared<SearchState>(init_state);
+	initState->index = 0;
+	openPrio.push(initState);
+
+	bool found = false;
+	// Cycle through the tree
+	while (!openPrio.empty() && found == false)
+	{
+		std::shared_ptr<StateAStar> currentState = std::move(openPrio.top());
+		openPrio.pop();
+
+		if (closed.find(currentState) != closed.end())
+		{
+			continue;
+		}
+
+		closed.insert(currentState);
+
+		// Save all child-nodes to openPrio
+		for (auto &action : currentState->node->actions())
+		{
+			if (getCurrentRSS() + 1000000 > mem_limit_)
+			{
+				return {};
+			}
+
+			std::shared_ptr<StateAStar> nextState = std::make_shared<StateAStar>();
+			nextState->node = std::make_shared<SearchState>(action.execute(*currentState->node));
+			nextState->actionFromPreviousState = std::make_shared<SearchAction>(action);
+			nextState->prevNode = currentState;
+			nextState->index = currentState->index + 1;
+			auto heuristic = compute_heuristic(*nextState->node, *heuristic_);
+
+			if (nextState->node->isFinal())
+			{
+				found = true;
+				openPrio.push(std::move(nextState));
+				break;
+			}
+			// Insert only not visited nodes
+			else if (closed.find(nextState) == closed.end())
+			{
+				nextState->priority = heuristic + nextState->index;
+				openPrio.push(std::move(nextState));
+			}
+		}
+	}
+
+	// Create path to final node
+	std::vector<SearchAction> solution = {};
+	if (!closed.empty() && openPrio.top()->node->isFinal())
+	{
+		std::shared_ptr<StateAStar> actualState = openPrio.top();
+		while (actualState->node != initState->node)
+		{
+			solution.push_back(*(actualState->actionFromPreviousState));
+			actualState = actualState->prevNode;
+		}
+		reverse(solution.begin(), solution.end());
+		return solution;
+	}
+
 	return {};
 }
