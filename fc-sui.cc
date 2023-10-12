@@ -16,11 +16,28 @@
 #include <atomic>
 
 
+
+
+
+#include <malloc.h>
+#include <chrono>
+
+
+
+
 void eval_strategy(
         std::unique_ptr<SearchStrategyItf> &search_strategy,
         const SearchState &init_state,
         StrategyEvaluation *report
     ) {
+    malloc_trim(0);
+     // Get the current time
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Wait for 1 second
+    while (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - start_time).count() < 1);
+
+    
 
     auto t0 = std::chrono::steady_clock::now();
 	auto solution = search_strategy->solve(init_state);
