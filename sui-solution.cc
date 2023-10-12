@@ -270,13 +270,84 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
  * A STAR *
  *************************************************************/
 
+double HSDH(const GameState &state)
+{
+	std::vector<int> homesCounts = {};
+	bool stackEmpty = false;
+	for (const auto &home : state.homes)
+	{
+		bool found = false;
+		double count = 0;
+		for (const auto &stack : state.stacks)
+		{
+			count = 0;
+			auto storage = stack.storage();
+			if (!stackEmpty || storage.empty())
+				stackEmpty = true;
+			for (const auto &actCard : storage)
+			{
+				count++;
+				if (home.canAccept(actCard))
+				{
+					found = true;
+					homesCounts.push_back(count - 1);
+					break;
+				}
+			}
+			if (found)
+				break;
+		}
+	}
+	double h = 0;
+	for (auto &n : homesCounts)
+		h += n;
+	if (stackEmpty)
+		return h;
+	const auto &card = state.stacks[0].storage().back();
+	for (const auto &fc : state.free_cells)
+	{
+		if (fc.canAccept(card))
+		{
+			return h;
+		}
+	}
+	return h * 2;
+}
+
+// source: https://www.johnkoza.com/gp.org/hc2013/Sipper-Paper.pdf
+/* CARDS OUT OF ORDER HEURISTIC */
+double NotInOder(const GameState &state) {
+    double CardsNotInOrder = 0;
+    std::vector<int> allCardValuesFromAStack; // Create an array to collect card values
+    // Iterate through cascade (tableau) piles
+    for (const auto &tableauStack : state.stacks) {
+        auto stack = tableauStack.storage();
+        for (const auto &card : stack) {
+            allCardValuesFromAStack.push_back(card.value); // Collect all card values
+        }
+    }
+    // Count occurrences of numbers that are not in order
+    for (size_t i = 0; i < allCardValuesFromAStack.size() - 1; i++) {
+        if (allCardValuesFromAStack[i] > allCardValuesFromAStack[i + 1]) {
+            CardsNotInOrder += 1.0; // Increment for each out-of-order card
+        }
+    }
+
+    // Normalize the cards out of order heuristic
+    return (CardsNotInOrder/52); //52 == maximum of cards out of homes
+} 
+
+
 double StudentHeuristic::distanceLowerBound(const GameState &state) const
 {
-	return 0;
+	return NotInOder(state);
 }
 
 std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 {
+	static int i = 0;
+	std::cout << i << std::endl;
+	i++;
 	if (init_state.isFinal())
 	{
 		return {};
@@ -300,7 +371,7 @@ std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 
 	bool found = false;
 	// Cycle through the tree
-	while (!openPrio.empty() && found == false)
+	while (!openPrio.empty() && !found)
 	{
 		std::shared_ptr<StateAStar> currentState = std::move(openPrio.top());
 		openPrio.pop();
@@ -324,8 +395,6 @@ std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 			nextState->node = std::make_shared<SearchState>(action.execute(*currentState->node));
 			nextState->actionFromPreviousState = std::make_shared<SearchAction>(action);
 			nextState->prevNode = currentState;
-			nextState->index = currentState->index + 1;
-			auto heuristic = compute_heuristic(*nextState->node, *heuristic_);
 
 			if (nextState->node->isFinal())
 			{
@@ -336,6 +405,8 @@ std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 			// Insert only not visited nodes
 			else if (closed.find(nextState) == closed.end())
 			{
+				nextState->index = currentState->index + 1;
+				auto heuristic = compute_heuristic(*nextState->node, *heuristic_);
 				nextState->priority = heuristic + nextState->index;
 				openPrio.push(std::move(nextState));
 			}
