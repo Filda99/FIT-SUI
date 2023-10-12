@@ -124,7 +124,7 @@ std::vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_stat
 
 	bool found = false;
 	// Cycle through the tree
-	while (!open.empty() && found == false)
+	while (!open.empty() && !found)
 	{
 		std::shared_ptr<StateBFS> currentState = std::move(open.back());
 		open.pop_back();
