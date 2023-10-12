@@ -16,6 +16,9 @@ public:
 	SearchState execute(const SearchState& state) const ;
 
     friend std::ostream& operator<< (std::ostream& os, const SearchAction & action) ;
+
+    const Location& from() const;
+    const Location& to() const;
 private:
 	Location from_;
 	Location to_;
@@ -28,13 +31,15 @@ public:
 	bool isFinal() const;
 	std::vector<SearchAction> actions() const;
 
-	bool execute(Location from, Location to);
+	bool execute(const SearchAction &action);
     static unsigned long long nbExpanded();
 
     friend std::ostream& operator<< (std::ostream& os, const SearchState & state) ;
     friend bool operator<(const SearchState &a, const SearchState &b) ;
     friend bool operator==(const SearchState &a, const SearchState &b) ;
     friend double compute_heuristic(const SearchState &state, const AStarHeuristicItf &heuristic);
+    friend size_t hash(const SearchState &state);
+
 private:
 	void runSafeMoves_();
 	GameState state_;
