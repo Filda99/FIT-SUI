@@ -78,7 +78,7 @@ bool operator==(const SearchState &a, const SearchState &b)
 
 inline size_t hash_card(const Card &card)
 {
-	return std::hash<int>()(static_cast<int>(card.color)) ^
+	return std::hash<Color>()(card.color) ^
 		   (std::hash<int>()(card.value) << 1);
 }
 
