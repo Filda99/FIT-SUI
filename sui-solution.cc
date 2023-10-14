@@ -192,7 +192,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 	}
 
 	std::deque<std::shared_ptr<StateDFS>> open;
-	std::unordered_set<std::shared_ptr<StateDFS>, StateHash<StateDFS>, StateEquality<StateDFS>> closed;
 
 	// Initial state
 	std::shared_ptr<StateDFS> initState = std::make_shared<StateDFS>();
@@ -209,13 +208,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 
 		if (currentState->index < depth_limit_)
 		{
-			if (closed.find(currentState) != closed.end())
-			{
-				continue;
-			}
-
-			closed.insert(currentState);
-
 			// Save all child-nodes to open
 			for (auto action : currentState->node->actions())
 			{
@@ -236,11 +228,7 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 					open.push_front(std::move(nextState));
 					break;
 				}
-				// Insert only not visited nodes
-				else if (closed.find(nextState) == closed.end())
-				{
-					open.push_back(std::move(nextState));
-				}
+				open.push_back(std::move(nextState));
 			}
 		}
 		else
@@ -251,7 +239,7 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 
 	// Create path to final node
 	std::vector<SearchAction> solution = {};
-	if (!closed.empty() && !open.empty() && open.front()->node->isFinal())
+	if (!open.empty() && open.front()->node->isFinal())
 	{
 		std::shared_ptr<StateDFS> actualState = move(open.front());
 		while (actualState->node != initState->node)
@@ -269,50 +257,6 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 /*************************************************************
  * A STAR *
  *************************************************************/
-
-double HSDH(const GameState &state)
-{
-	std::vector<int> homesCounts = {};
-	bool stackEmpty = false;
-	for (const auto &home : state.homes)
-	{
-		bool found = false;
-		double count = 0;
-		for (const auto &stack : state.stacks)
-		{
-			count = 0;
-			auto storage = stack.storage();
-			if (!stackEmpty || storage.empty())
-				stackEmpty = true;
-			for (const auto &actCard : storage)
-			{
-				count++;
-				if (home.canAccept(actCard))
-				{
-					found = true;
-					homesCounts.push_back(count - 1);
-					break;
-				}
-			}
-			if (found)
-				break;
-		}
-	}
-	double h = 0;
-	for (auto &n : homesCounts)
-		h += n;
-	if (stackEmpty)
-		return h;
-	const auto &card = state.stacks[0].storage().back();
-	for (const auto &fc : state.free_cells)
-	{
-		if (fc.canAccept(card))
-		{
-			return h;
-		}
-	}
-	return h * 2;
-}
 
 // source: https://www.johnkoza.com/gp.org/hc2013/Sipper-Paper.pdf
 /* CARDS OUT OF ORDER HEURISTIC */
@@ -337,17 +281,31 @@ double NotInOder(const GameState &state) {
     return (CardsNotInOrder/52); //52 == maximum of cards out of homes
 } 
 
+// Count the number of cards that are not at the foundation piles
+double NumCardsNotAtFoundations(const GameState &state) {
+    double count = 0;
+    const auto &firstCard = state.stacks[0].storage().back();
+    for (const auto &free_cells : state.free_cells) {
+        if (!free_cells.canAccept(firstCard)) //how many cards there are
+            count++;
+    }
+    for (const auto &stack : state.stacks) {
+        count += stack.storage().size();
+    }
+    return count;
+} 
+
 
 double StudentHeuristic::distanceLowerBound(const GameState &state) const
 {
-	return NotInOder(state);
+	std::vector<double> heuristics = {};
+	heuristics.push_back(NumCardsNotAtFoundations(state));
+	heuristics.push_back(NotInOder(state));
+	return std::accumulate(heuristics.begin(), heuristics.end(), 0) / heuristics.size();
 }
 
 std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 {
-	static int i = 0;
-	std::cout << i << std::endl;
-	i++;
 	if (init_state.isFinal())
 	{
 		return {};
@@ -405,8 +363,8 @@ std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 			// Insert only not visited nodes
 			else if (closed.find(nextState) == closed.end())
 			{
-				nextState->index = currentState->index + 1;
 				auto heuristic = compute_heuristic(*nextState->node, *heuristic_);
+				nextState->index = currentState->index + 1;
 				nextState->priority = heuristic + nextState->index;
 				openPrio.push(std::move(nextState));
 			}
