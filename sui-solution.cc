@@ -9,6 +9,9 @@
 #include <set>
 #include <queue>
 
+#define SPACE_RESERVED 50000000
+
+
 /*************************************************************
  * STRUCTURES *
  *************************************************************/
@@ -139,7 +142,7 @@ std::vector<SearchAction> BreadthFirstSearch::solve(const SearchState &init_stat
 		// Save all child-nodes to open
 		for (auto &action : currentState->node->actions())
 		{
-			if (getCurrentRSS() + 1000000 > mem_limit_)
+			if (getCurrentRSS() + SPACE_RESERVED > mem_limit_)
 			{
 				return {};
 			}
@@ -211,7 +214,7 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
 			// Save all child-nodes to open
 			for (auto action : currentState->node->actions())
 			{
-				if (getCurrentRSS() + 1000000 > mem_limit_)
+				if (getCurrentRSS() + SPACE_RESERVED > mem_limit_)
 				{
 					return {};
 				}
@@ -259,7 +262,7 @@ std::vector<SearchAction> DepthFirstSearch::solve(const SearchState &init_state)
  *************************************************************/
 
 // source: https://www.johnkoza.com/gp.org/hc2013/Sipper-Paper.pdf
-/* CARDS OUT OF ORDER HEURISTIC */
+// Cards out of a order
 double NotInOder(const GameState &state) {
     double CardsNotInOrder = 0;
     std::vector<int> allCardValuesFromAStack; // Create an array to collect card values
@@ -295,13 +298,12 @@ double NumCardsNotAtFoundations(const GameState &state) {
     return count;
 } 
 
-
 double StudentHeuristic::distanceLowerBound(const GameState &state) const
 {
-	std::vector<double> heuristics = {};
-	heuristics.push_back(NumCardsNotAtFoundations(state));
-	heuristics.push_back(NotInOder(state));
-	return std::accumulate(heuristics.begin(), heuristics.end(), 0) / heuristics.size();
+	double heuristics = 0;
+	heuristics += NumCardsNotAtFoundations(state);
+	heuristics += NotInOder(state);
+	return heuristics / 2;
 }
 
 std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
@@ -344,7 +346,7 @@ std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
 		// Save all child-nodes to openPrio
 		for (auto &action : currentState->node->actions())
 		{
-			if (getCurrentRSS() + 1000000 > mem_limit_)
+			if (getCurrentRSS() + SPACE_RESERVED > mem_limit_)
 			{
 				return {};
 			}
