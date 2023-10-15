@@ -300,10 +300,10 @@ double NumCardsNotAtFoundations(const GameState &state) {
 
 double StudentHeuristic::distanceLowerBound(const GameState &state) const
 {
-	double heuristics = 0;
-	heuristics += NumCardsNotAtFoundations(state);
-	heuristics += NotInOder(state);
-	return heuristics / 2;
+	double heuristic = 0.0;
+	heuristic += NumCardsNotAtFoundations(state);
+	heuristic += NotInOder(state);
+	return floor(heuristic / 2);
 }
 
 std::vector<SearchAction> AStarSearch::solve(const SearchState &init_state)
